@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, TextInput, Alert } from "react-native";
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { InitDB, DeleteTask } from "../database/database";
 import * as SQLite from "expo-sqlite";
@@ -7,18 +7,18 @@ import { useFocusEffect } from "@react-navigation/native";
 
 const db = SQLite.openDatabaseSync("tasks.db");
 
-export default function HomeScreen({ navigation }: any) {
-  const [tasks, setTasks] = useState<any[]>([]);
+export default function TrashScreen({ navigation }: any) {
+  const [deletedTasks, setDeletedTasks] = useState<any[]>([]);
   const [searchText, setSearchText] = useState("");
   const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
 
-  // Load danh sách task chưa xoá
-  const loadData = async () => {
+  // Load danh sách task đã xóa
+  const loadDeletedTasks = async () => {
     await InitDB();
     const rows = await db.getAllAsync(
-      "SELECT * FROM tasks WHERE deletedAt IS NULL ORDER BY id DESC"
+      "SELECT * FROM tasks WHERE deletedAt IS NOT NULL ORDER BY deletedAt DESC"
     );
-    setTasks(rows);
+    setDeletedTasks(rows);
     filterTasks(rows, searchText);
   };
 
@@ -34,26 +34,26 @@ export default function HomeScreen({ navigation }: any) {
     }
   };
 
-  // Tự reload khi quay lại screen
+  // Reload khi quay lại screen
   useFocusEffect(
     React.useCallback(() => {
-      loadData();
+      loadDeletedTasks();
     }, [])
   );
 
-  // Xác nhận xoá
-  const confirmDelete = (id: number) => {
+  // Xoá hoàn toàn task
+  const deleteForever = (id: number) => {
     Alert.alert(
-      "Xoá khoản chi",
-      "Bạn có chắc chắn muốn xoá khoản này?",
+      "Xoá vĩnh viễn",
+      "Bạn có chắc chắn muốn xoá khoản này vĩnh viễn?",
       [
         { text: "Huỷ", style: "cancel" },
         {
           text: "Xoá",
           style: "destructive",
           onPress: async () => {
-            await DeleteTask(id); // soft delete
-            loadData(); // reload danh sách
+            await db.runAsync("DELETE FROM tasks WHERE id = ?", [id]);
+            loadDeletedTasks();
           },
         },
       ]
@@ -62,24 +62,17 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>EXPENSE TRACKER</Text>
+      <Text style={styles.title}>Trash</Text>
 
       <TextInput
         style={styles.searchInput}
-        placeholder="Tìm kiếm..."
+        placeholder="Tìm kiếm trong thùng rác..."
         value={searchText}
         onChangeText={(text) => {
           setSearchText(text);
-          filterTasks(tasks, text);
+          filterTasks(deletedTasks, text);
         }}
       />
-
-      <TouchableOpacity
-        onPress={() => navigation.navigate("AddExpense")}
-        style={styles.addBtn}
-      >
-        <Text style={styles.addText}>Add</Text>
-      </TouchableOpacity>
 
       <FlatList
         data={filteredTasks}
@@ -87,22 +80,13 @@ export default function HomeScreen({ navigation }: any) {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.item}
-            onPress={() => navigation.navigate("EditExpense", { task: item })}
-            // Nếu muốn, có thể thêm xoá nhanh tại đây
-            // onLongPress={() => confirmDelete(item.id)}
+            onPress={() => deleteForever(item.id)}
           >
             <Text style={styles.itemTitle}>{item.title}</Text>
             <Text style={styles.itemAmount}>{item.amount} đ</Text>
           </TouchableOpacity>
         )}
       />
-
-      <TouchableOpacity
-        onPress={() => navigation.navigate("Trash")}
-        style={styles.trashBtn}
-      >
-        <Text style={styles.addText}>Trash</Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -117,15 +101,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
     marginTop: 20,
+    marginBottom: 10,
   },
-  addBtn: {
-    backgroundColor: "#007AFF",
-    padding: 12,
-    borderRadius: 8,
-    width: "90%",
-    marginTop: 10,
-  },
-  addText: { color: "#fff", textAlign: "center", fontSize: 18 },
   item: {
     width: "90%",
     backgroundColor: "#f2f2f2",
@@ -137,11 +114,4 @@ const styles = StyleSheet.create({
   },
   itemTitle: { fontSize: 16 },
   itemAmount: { fontSize: 16, fontWeight: "bold" },
-  trashBtn: {
-    backgroundColor: "#FF3B30",
-    padding: 12,
-    borderRadius: 8,
-    width: "90%",
-    marginTop: 20,
-  },
 });
